@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "Camera/CameraComponent.h"			   // UCameraComponent
+#include "Components/SceneComponent.h"		   // USceneComponent
+#include "Components/InputComponent.h"		   // InputComponent
 
 /// WARNING: SRanipal only supports Windows development currently
 // #ifdef _WIN32 
@@ -31,6 +34,8 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	virtual void BeginDestroy() override;
+	UWorld *World; // to get info about the world: time, frames, etc.
+
 private:
 	// Camera Variables
 	// Editable from within the editor (useful when reparenting existing blueprint)

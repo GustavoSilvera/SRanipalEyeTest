@@ -3,6 +3,8 @@
 
 #include "EyeTrackerCameraPawn.h"
 #include "HeadMountedDisplayFunctionLibrary.h"
+#include "DrawDebugHelpers.h"				   // Debug Line/Sphere
+
 
 // Sets default values
 AEyeTrackerCameraPawn::AEyeTrackerCameraPawn()
@@ -13,13 +15,9 @@ AEyeTrackerCameraPawn::AEyeTrackerCameraPawn()
 	// Set this pawn to be controlled by first (only) player
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
 
-	// Set up the root position to be the this mesh
-	SetRootComponent(GetMesh());
-
 	// Spawn the RootComponent and Camera for the VR camera
 	VRCameraRoot = CreateDefaultSubobject<USceneComponent>(TEXT("VRCameraRoot"));
 	VRCameraRoot->SetupAttachment(GetRootComponent());		// The vehicle blueprint itself
-	VRCameraRoot->SetRelativeLocation(CameraLocnInVehicle); // Offset from center of camera
 
 	// Create a camera and attach to root component
 	FirstPersonCam = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCam"));
@@ -36,13 +34,16 @@ void AEyeTrackerCameraPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// get the world
+    World = GetWorld();
+
 	// Now we'll begin with setting up the VR Origin logic
 	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Eye); // Also have Floor & Stage Level
 	
 	check(SRanipal != nullptr);
 }
 
-void AEyeTracker::BeginDestroy()
+void AEyeTrackerCameraPawn::BeginDestroy()
 {
     if (SRanipal)
         SRanipalEye_Core::DestroyEyeModule();
@@ -55,7 +56,7 @@ void AEyeTrackerCameraPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
     // Assign Left/Right Gaze direction
-	
+	FVector LEyeOrigin, LGazeRay, REyeOrigin, RGazeRay;
     SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, LGazeRay);
     SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, RGazeRay);
 
