@@ -26,6 +26,7 @@ AEyeTrackerCameraPawn::AEyeTrackerCameraPawn()
 	FirstPersonCam->FieldOfView = 90.0f;			 // editable
 
     // Initialize the SRanipal eye tracker (WINDOWS ONLY)
+	SRanipalFramework = SRanipalEye_Framework::Instance();
     SRanipal = SRanipalEye_Core::Instance();
 }
 
@@ -41,12 +42,17 @@ void AEyeTrackerCameraPawn::BeginPlay()
 	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Eye); // Also have Floor & Stage Level
 	
 	check(SRanipal != nullptr);
+	SRanipalFramework->StartFramework(SRanipalFramework->GetEyeVersion());
 }
 
 void AEyeTrackerCameraPawn::BeginDestroy()
 {
     if (SRanipal)
         SRanipalEye_Core::DestroyEyeModule();
+	if (SRanipalFramework){
+		SRanipalFramework->StopFramework();
+		SRanipalEye_Framework::DestroyEyeFramework();
+	}
     Super::BeginDestroy();
 }
 
@@ -57,9 +63,9 @@ void AEyeTrackerCameraPawn::Tick(float DeltaTime)
 
     // Assign Left/Right Gaze direction
 	FVector LEyeOrigin, LGazeRay, REyeOrigin, RGazeRay;
+	check(SRanipal != nullptr);
     SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, LGazeRay);
     SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, RGazeRay);
-
 	// get information about the VR world
 	const float ScaleToUE4Meters = UHeadMountedDisplayFunctionLibrary::GetWorldToMetersScale(World);
 	FRotator WorldRot = FirstPersonCam->GetComponentRotation(); // based on the hmd rotation

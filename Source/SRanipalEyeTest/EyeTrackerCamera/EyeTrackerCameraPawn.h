@@ -12,6 +12,7 @@
 // #ifdef _WIN32 
 #include "SRanipalEye.h"      // SRanipal Module Framework
 #include "SRanipalEye_Core.h" // SRanipal Eye Tracker
+#include "SRanipalEye_Framework.h"
 
 #include "EyeTrackerCameraPawn.generated.h"
 
@@ -47,4 +48,5 @@ private:
 
 	// SRanipal variables
     SRanipalEye_Core *SRanipal;
+	SRanipalEye_Framework *SRanipalFramework;
 };
