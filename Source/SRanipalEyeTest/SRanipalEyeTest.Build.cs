@@ -24,7 +24,10 @@ public class SRanipalEyeTest : ModuleRules
 			bEnableExceptions = true; // enable unwind semantics for C++-style exceptions
 			PrivateDependencyModuleNames.AddRange(new string[] { "SRanipalEye" });
 			PrivateIncludePathModuleNames.AddRange(new string[] { "SRanipalEye" });
+			// add for eye enums header file
+			PublicIncludePaths.AddRange(new string[] {"../Plugins/SRanipal/Source/SRanipal/Public/Eye/"});
 		}
+
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 		
