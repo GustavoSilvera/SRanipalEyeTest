@@ -2,7 +2,9 @@
 
 
 #include "EyeTrackerCameraPawn.h"
+#include "Kismet/KismetSystemLibrary.h"		   // PrintString, QuitGame
 #include "HeadMountedDisplayFunctionLibrary.h"
+#include "Kismet/GameplayStatics.h"			   // GetPlayerController
 #include "DrawDebugHelpers.h"				   // Debug Line/Sphere
 
 
@@ -29,6 +31,14 @@ AEyeTrackerCameraPawn::AEyeTrackerCameraPawn()
 	SRanipalFramework = SRanipalEye_Framework::Instance();
     SRanipal = SRanipalEye_Core::Instance();
 }
+void AEyeTrackerCameraPawn::ErrMsg(const FString &message, const bool isFatal = false)
+{
+	/// NOTE: solely for debugging
+	UKismetSystemLibrary::PrintString(World, message, true, true, FLinearColor(1, 0, 0, 1), 20.0f);
+	if (isFatal)
+		UKismetSystemLibrary::QuitGame(World, pc, EQuitPreference::Quit, false);
+	return;
+}
 
 // Called when the game starts or when spawned
 void AEyeTrackerCameraPawn::BeginPlay()
@@ -38,11 +48,13 @@ void AEyeTrackerCameraPawn::BeginPlay()
 	// get the world
     World = GetWorld();
 
+	pc = UGameplayStatics::GetPlayerController(World, 0); // main player (0) controller
+
 	// Now we'll begin with setting up the VR Origin logic
 	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Eye); // Also have Floor & Stage Level
 	
 	check(SRanipal != nullptr);
-	SRanipalFramework->StartFramework(SRanipalFramework->GetEyeVersion());
+	SRanipalFramework->StartFramework(SupportedEyeVersion::version1);
 }
 
 void AEyeTrackerCameraPawn::BeginDestroy()
@@ -62,14 +74,22 @@ void AEyeTrackerCameraPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
     // Assign Left/Right Gaze direction
-	FVector LEyeOrigin, LGazeRay, REyeOrigin, RGazeRay;
 	check(SRanipal != nullptr);
-    SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, LGazeRay);
-    SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, RGazeRay);
+    bool validL = SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, LGazeRay);
+    bool validR = SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, RGazeRay);
 	// get information about the VR world
 	const float ScaleToUE4Meters = UHeadMountedDisplayFunctionLibrary::GetWorldToMetersScale(World);
 	FRotator WorldRot = FirstPersonCam->GetComponentRotation(); // based on the hmd rotation
-
+	// FString msg = "LEyeOrigin: {" + FString::SanitizeFloat(LEyeOrigin.X) + ", " + FString::SanitizeFloat(LEyeOrigin.Y) + ", " + FString::SanitizeFloat(LEyeOrigin.Z) + "}";
+	// ErrMsg(msg);
+	if(validL)
+		ErrMsg("Good L");
+	else 
+		ErrMsg("Bad L");
+	if(validR)
+		ErrMsg("Good R");
+	else 
+		ErrMsg("Bad R");
 	// Now finally for the interesting part:
 	// Draw individual rays for left (green) and right (yellow) eye
 	FVector LeftEyeGaze = WorldRot.RotateVector(ScaleToUE4Meters * LGazeRay);

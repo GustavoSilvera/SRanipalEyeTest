@@ -35,6 +35,11 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	virtual void BeginDestroy() override;
+
+	// debugging
+	void ErrMsg(const FString &message, const bool isFatal);
+	APlayerController *pc;
+
 	UWorld *World; // to get info about the world: time, frames, etc.
 
 private:
@@ -49,4 +54,8 @@ private:
 	// SRanipal variables
     SRanipalEye_Core *SRanipal;
 	SRanipalEye_Framework *SRanipalFramework;
+	FVector LEyeOrigin{FVector::ZeroVector};
+	FVector LGazeRay{FVector::ZeroVector};
+	FVector REyeOrigin{FVector::ZeroVector};
+	FVector RGazeRay{FVector::ZeroVector};
 };
