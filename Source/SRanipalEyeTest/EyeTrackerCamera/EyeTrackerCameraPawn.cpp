@@ -54,7 +54,7 @@ void AEyeTrackerCameraPawn::BeginPlay()
 	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Eye); // Also have Floor & Stage Level
 	
 	check(SRanipal != nullptr);
-	SRanipalFramework->StartFramework(SupportedEyeVersion::version1);
+	SRanipalFramework->StartFramework(SupportedEyeVersion::version1); // same result with version 2
 }
 
 void AEyeTrackerCameraPawn::BeginDestroy()
@@ -80,16 +80,6 @@ void AEyeTrackerCameraPawn::Tick(float DeltaTime)
 	// get information about the VR world
 	const float ScaleToUE4Meters = UHeadMountedDisplayFunctionLibrary::GetWorldToMetersScale(World);
 	FRotator WorldRot = FirstPersonCam->GetComponentRotation(); // based on the hmd rotation
-	// FString msg = "LEyeOrigin: {" + FString::SanitizeFloat(LEyeOrigin.X) + ", " + FString::SanitizeFloat(LEyeOrigin.Y) + ", " + FString::SanitizeFloat(LEyeOrigin.Z) + "}";
-	// ErrMsg(msg);
-	if(validL)
-		ErrMsg("Good L");
-	else 
-		ErrMsg("Bad L");
-	if(validR)
-		ErrMsg("Good R");
-	else 
-		ErrMsg("Bad R");
 	// Now finally for the interesting part:
 	// Draw individual rays for left (green) and right (yellow) eye
 	FVector LeftEyeGaze = WorldRot.RotateVector(ScaleToUE4Meters * LGazeRay);
