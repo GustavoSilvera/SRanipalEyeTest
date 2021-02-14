@@ -49,12 +49,15 @@ void AEyeTrackerCameraPawn::BeginPlay()
     World = GetWorld();
 
 	pc = UGameplayStatics::GetPlayerController(World, 0); // main player (0) controller
-
+	SelfCamera = pc->PlayerCameraManager;
 	// Now we'll begin with setting up the VR Origin logic
 	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Eye); // Also have Floor & Stage Level
 	
 	check(SRanipal != nullptr);
 	SRanipalFramework->StartFramework(SupportedEyeVersion::version1); // same result with version 2
+
+	SRanipal->GetEyeData_(&EyeData);
+    TimestampRef = EyeData.timestamp;
 }
 
 void AEyeTrackerCameraPawn::BeginDestroy()
@@ -75,8 +78,49 @@ void AEyeTrackerCameraPawn::Tick(float DeltaTime)
 
     // Assign Left/Right Gaze direction
 	check(SRanipal != nullptr);
-    bool validL = SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, LGazeRay);
-    bool validR = SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, RGazeRay);
+	// Getting real eye tracker data
+	SRanipal->GetEyeData_(&EyeData);
+    TimestampSR = EyeData.timestamp - TimestampRef;
+	// ftime_s is used to get the UE4 (carla) timestamp of the world at this tick
+    double ftime_s = UGameplayStatics::GetRealTimeSeconds(World);
+    // Assigns EyeOrigin and Gaze direction (normalized) of combined gaze
+    GazeValid = SRanipal->GetGazeRay(GazeIndex::COMBINE, EyeOrigin, GazeRay);
+    // Assign Left/Right Gaze direction
+    /// NOTE: the eye gazes are reversed at the lowest level bc SRanipal has a bug in their
+    // libraries that flips these when collected from the sensor. We can verify this by
+    // plotting debug lines for the left and right eye gazes and notice that if we close
+    // one eye, the OTHER eye's gaze is null, when it should be the closed eye instead
+    LGazeValid = SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, RGazeRay);
+    RGazeValid = SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, LGazeRay);
+    // Assign Eye openness
+    LEyeOpenValid = SRanipal->GetEyeOpenness(EyeIndex::LEFT, LEyeOpenness);
+    REyeOpenValid = SRanipal->GetEyeOpenness(EyeIndex::RIGHT, REyeOpenness);
+    // Assign Pupil positions
+    LPupilPosValid = SRanipal->GetPupilPosition(EyeIndex::LEFT, LPupilPos);
+    RPupilPosValid = SRanipal->GetPupilPosition(EyeIndex::RIGHT, RPupilPos);
+    // Assign Pupil Diameters
+    LPupilDiameter = EyeData.verbose_data.left.pupil_diameter_mm;
+    RPupilDiameter = EyeData.verbose_data.right.pupil_diameter_mm;
+    // Assign data convergence
+    ConvergenceDist = EyeData.verbose_data.combined.convergence_distance_mm;
+    // Assign FFocus information
+    /// NOTE: requires the player's camera manager
+    /// NOTE: the ECollisionChannel::ECC_Pawn is set to ignore the pawn/vehicle for the line-trace
+    FVector FocusOrigin, FocusDirection; // These are ignored since we compute them in EgoVehicle
+    SRanipal->Focus(GazeIndex::COMBINE, SelfCamera,
+                    ECC_GameTraceChannel4, FocusInfo,
+                    FocusOrigin, FocusDirection);
+    if(FocusInfo.actor != nullptr){
+        FocusInfo.actor->GetName(FocusActorName);
+    }
+    else{
+        FocusActorName = FString(""); // empty string, not looking at any actor
+    }
+    UE_LOG(LogTemp, Log, TEXT("Focus Actor: %s"), *FocusActorName);
+    FocusActorPoint = FocusInfo.point;
+    FocusActorDist = FocusInfo.distance;
+	// Update the UE4 tick timestamp
+    TimestampUE4 = int64_t(ftime_s * 1000);
 	// get information about the VR world
 	const float ScaleToUE4Meters = UHeadMountedDisplayFunctionLibrary::GetWorldToMetersScale(World);
 	FRotator WorldRot = FirstPersonCam->GetComponentRotation(); // based on the hmd rotation

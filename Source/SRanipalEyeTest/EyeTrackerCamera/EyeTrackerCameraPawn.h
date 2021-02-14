@@ -7,6 +7,7 @@
 #include "Camera/CameraComponent.h"			   // UCameraComponent
 #include "Components/SceneComponent.h"		   // USceneComponent
 #include "Components/InputComponent.h"		   // InputComponent
+#include <cstdint>
 
 /// WARNING: SRanipal only supports Windows development currently
 // #ifdef _WIN32 
@@ -50,12 +51,50 @@ private:
 
 	UPROPERTY(Category = Camera, EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UCameraComponent *FirstPersonCam;
+    // Eye Tracker Variables
+    SRanipalEye_Core *SRanipal;               // SRanipalEye_Core.h
+    SRanipalEye_Framework *SRanipalFramework; // SRanipalEye_Framework.h
+    ViveSR::anipal::Eye::EyeData EyeData;     // SRanipal_Eyes_Enums.h
+    FFocusInfo FocusInfo;                     // SRanipal_Eyes_Enums.h
 
-	// SRanipal variables
-    SRanipalEye_Core *SRanipal;
-	SRanipalEye_Framework *SRanipalFramework;
-	FVector LEyeOrigin{FVector::ZeroVector};
-	FVector LGazeRay{FVector::ZeroVector};
-	FVector REyeOrigin{FVector::ZeroVector};
-	FVector RGazeRay{FVector::ZeroVector};
+    int64_t TimestampRef = 0;   // reference timestamp (ms) since the hmd started ticking
+    int64_t TimestampSR = 0;    // timestamp of when the frame was captured by SRanipal. in Seconds
+    int64_t TimestampUE4 = 0; // Timestamp within UE4 of when the EyeTracker Tick() occurred
+    // (Low level) Eye Tracker Data
+    FVector GazeRay{FVector::ZeroVector}; // initialized as {1,0,0}
+    FVector EyeOrigin{-5.60, 0.14, 1.12}; // initialized to {0,0,0} at the camera
+    bool GazeValid = false;
+    float Vergence = -1.0f; // distance to focus point
+    // L/R additional eye tracker data from SRanipal
+    FVector LGazeRay{FVector::ZeroVector};    // Left eye Gaze ray only
+    FVector LEyeOrigin{-6.308, 3.247, 1.264}; // initialized to {0,0,0} at the camera
+    bool LGazeValid = false;
+    FVector RGazeRay{FVector::ZeroVector};     // Right eye Gaze ray only
+    FVector REyeOrigin{-5.284, -3.269, 1.014}; // initialized to {0,0,0} at the camera
+    bool RGazeValid = false;
+    // Eye openness
+    float LEyeOpenness = -1.0f; // Left eye openness (invalid at first)
+    bool LEyeOpenValid = false;
+    float REyeOpenness = -1.0f; // Right eye openness (invalid at first)
+    bool REyeOpenValid = false;
+    // Pupil positions
+    // (0, 0) is center, (1, 1) is top right, (-1, -1) is bottom left
+    FVector2D LPupilPos{FVector2D::ZeroVector}; // left eye pupil position
+    bool LPupilPosValid = false;
+    FVector2D RPupilPos{FVector2D::ZeroVector}; // right eye pupil position
+    bool RPupilPosValid = false;
+    // Pupil diameter
+    float LPupilDiameter = 0.0; // Left pupil diameter in mm
+    float RPupilDiameter = 0.0; // Right pupil diameter in mm
+    // Combined data convergence mm
+    float ConvergenceDist; // convergence distance (in mm)
+    // FFocusInfo
+    FString FocusActorName;  // Tag of the actor being focused on
+    FVector FocusActorPoint; // Hit point of the Focus Actor
+    float FocusActorDist;    // Distance to the Focus Actor
+
+    // non-SRanipal data fields
+
+    // Player Camera Manager
+    APlayerCameraManager *SelfCamera; // used for the SRanipal Focus call};
 };
