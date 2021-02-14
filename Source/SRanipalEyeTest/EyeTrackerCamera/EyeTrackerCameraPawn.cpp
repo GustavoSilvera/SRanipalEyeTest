@@ -7,6 +7,8 @@
 #include "Kismet/GameplayStatics.h"			   // GetPlayerController
 #include "DrawDebugHelpers.h"				   // Debug Line/Sphere
 
+#include <iostream> // IO
+#include <fstream> // File IO
 
 // Sets default values
 AEyeTrackerCameraPawn::AEyeTrackerCameraPawn()
@@ -27,9 +29,6 @@ AEyeTrackerCameraPawn::AEyeTrackerCameraPawn()
 	FirstPersonCam->bUsePawnControlRotation = false; // free for VR movement
 	FirstPersonCam->FieldOfView = 90.0f;			 // editable
 
-    // Initialize the SRanipal eye tracker (WINDOWS ONLY)
-	SRanipalFramework = SRanipalEye_Framework::Instance();
-    SRanipal = SRanipalEye_Core::Instance();
 }
 void AEyeTrackerCameraPawn::ErrMsg(const FString &message, const bool isFatal = false)
 {
@@ -49,10 +48,12 @@ void AEyeTrackerCameraPawn::BeginPlay()
     World = GetWorld();
 
 	pc = UGameplayStatics::GetPlayerController(World, 0); // main player (0) controller
-	SelfCamera = pc->PlayerCameraManager;
 	// Now we'll begin with setting up the VR Origin logic
 	UHeadMountedDisplayFunctionLibrary::SetTrackingOrigin(EHMDTrackingOrigin::Eye); // Also have Floor & Stage Level
 	
+    // Initialize the SRanipal eye tracker (WINDOWS ONLY)
+	SRanipalFramework = SRanipalEye_Framework::Instance();
+    SRanipal = SRanipalEye_Core::Instance();
 	check(SRanipal != nullptr);
 	SRanipalFramework->StartFramework(SupportedEyeVersion::version1); // same result with version 2
 
@@ -62,6 +63,7 @@ void AEyeTrackerCameraPawn::BeginPlay()
 
 void AEyeTrackerCameraPawn::BeginDestroy()
 {
+	WriteDataToFile();
     if (SRanipal)
         SRanipalEye_Core::DestroyEyeModule();
 	if (SRanipalFramework){
@@ -78,62 +80,65 @@ void AEyeTrackerCameraPawn::Tick(float DeltaTime)
 
     // Assign Left/Right Gaze direction
 	check(SRanipal != nullptr);
+	// all the SRanipal data will be stored in this structure
+	CustomEyeData ced;
 	// Getting real eye tracker data
 	SRanipal->GetEyeData_(&EyeData);
-    TimestampSR = EyeData.timestamp - TimestampRef;
+    ced.TimestampSR = EyeData.timestamp - TimestampRef;
 	// ftime_s is used to get the UE4 (carla) timestamp of the world at this tick
     double ftime_s = UGameplayStatics::GetRealTimeSeconds(World);
     // Assigns EyeOrigin and Gaze direction (normalized) of combined gaze
-    GazeValid = SRanipal->GetGazeRay(GazeIndex::COMBINE, EyeOrigin, GazeRay);
+    ced.GazeValid = SRanipal->GetGazeRay(GazeIndex::COMBINE, ced.EyeOrigin, ced.GazeRay);
     // Assign Left/Right Gaze direction
     /// NOTE: the eye gazes are reversed at the lowest level bc SRanipal has a bug in their
     // libraries that flips these when collected from the sensor. We can verify this by
     // plotting debug lines for the left and right eye gazes and notice that if we close
     // one eye, the OTHER eye's gaze is null, when it should be the closed eye instead
-    LGazeValid = SRanipal->GetGazeRay(GazeIndex::LEFT, LEyeOrigin, RGazeRay);
-    RGazeValid = SRanipal->GetGazeRay(GazeIndex::RIGHT, REyeOrigin, LGazeRay);
+    ced.LGazeValid = SRanipal->GetGazeRay(GazeIndex::LEFT, ced.LEyeOrigin, ced.RGazeRay);
+    ced.RGazeValid = SRanipal->GetGazeRay(GazeIndex::RIGHT, ced.REyeOrigin, ced.LGazeRay);
     // Assign Eye openness
-    LEyeOpenValid = SRanipal->GetEyeOpenness(EyeIndex::LEFT, LEyeOpenness);
-    REyeOpenValid = SRanipal->GetEyeOpenness(EyeIndex::RIGHT, REyeOpenness);
+    ced.LEyeOpenValid = SRanipal->GetEyeOpenness(EyeIndex::LEFT, ced.LEyeOpenness);
+    ced.REyeOpenValid = SRanipal->GetEyeOpenness(EyeIndex::RIGHT, ced.REyeOpenness);
     // Assign Pupil positions
-    LPupilPosValid = SRanipal->GetPupilPosition(EyeIndex::LEFT, LPupilPos);
-    RPupilPosValid = SRanipal->GetPupilPosition(EyeIndex::RIGHT, RPupilPos);
+    ced.LPupilPosValid = SRanipal->GetPupilPosition(EyeIndex::LEFT, ced.LPupilPos);
+    ced.RPupilPosValid = SRanipal->GetPupilPosition(EyeIndex::RIGHT, ced.RPupilPos);
     // Assign Pupil Diameters
-    LPupilDiameter = EyeData.verbose_data.left.pupil_diameter_mm;
-    RPupilDiameter = EyeData.verbose_data.right.pupil_diameter_mm;
+    ced.LPupilDiameter = EyeData.verbose_data.left.pupil_diameter_mm;
+    ced.RPupilDiameter = EyeData.verbose_data.right.pupil_diameter_mm;
     // Assign data convergence
-    ConvergenceDist = EyeData.verbose_data.combined.convergence_distance_mm;
+    ced.ConvergenceDist = EyeData.verbose_data.combined.convergence_distance_mm;
     // Assign FFocus information
     /// NOTE: requires the player's camera manager
     /// NOTE: the ECollisionChannel::ECC_Pawn is set to ignore the pawn/vehicle for the line-trace
     FVector FocusOrigin, FocusDirection; // These are ignored since we compute them in EgoVehicle
-    SRanipal->Focus(GazeIndex::COMBINE, SelfCamera,
-                    ECC_GameTraceChannel4, FocusInfo,
+    SRanipal->Focus(GazeIndex::COMBINE, pc->PlayerCameraManager,
+                    ECC_Pawn, FocusInfo,
                     FocusOrigin, FocusDirection);
     if(FocusInfo.actor != nullptr){
-        FocusInfo.actor->GetName(FocusActorName);
+        FocusInfo.actor->GetName(ced.FocusActorName);
     }
     else{
-        FocusActorName = FString(""); // empty string, not looking at any actor
+        ced.FocusActorName = FString(""); // empty string, not looking at any actor
     }
-    UE_LOG(LogTemp, Log, TEXT("Focus Actor: %s"), *FocusActorName);
-    FocusActorPoint = FocusInfo.point;
-    FocusActorDist = FocusInfo.distance;
+    ced.FocusActorPoint = FocusInfo.point;
+    ced.FocusActorDist = FocusInfo.distance;
 	// Update the UE4 tick timestamp
-    TimestampUE4 = int64_t(ftime_s * 1000);
+    ced.TimestampUE4 = int64_t(ftime_s * 1000);
 	// get information about the VR world
 	const float ScaleToUE4Meters = UHeadMountedDisplayFunctionLibrary::GetWorldToMetersScale(World);
 	FRotator WorldRot = FirstPersonCam->GetComponentRotation(); // based on the hmd rotation
 	// Now finally for the interesting part:
 	// Draw individual rays for left (green) and right (yellow) eye
-	FVector LeftEyeGaze = WorldRot.RotateVector(ScaleToUE4Meters * LGazeRay);
-	FVector LeftEyeOrigin = WorldRot.RotateVector(LEyeOrigin) + FirstPersonCam->GetComponentLocation();
+	FVector LeftEyeGaze = WorldRot.RotateVector(ScaleToUE4Meters * ced.LGazeRay);
+	FVector LeftEyeOrigin = WorldRot.RotateVector(ced.LEyeOrigin) + FirstPersonCam->GetComponentLocation();
 	DrawDebugLine(World, LeftEyeOrigin, LeftEyeOrigin + LeftEyeGaze, FColor::Green, false, -1, 0, 1);
 
-	FVector RightEyeGaze = WorldRot.RotateVector(ScaleToUE4Meters * RGazeRay);
-	FVector RightEyeOrigin = WorldRot.RotateVector(REyeOrigin) + FirstPersonCam->GetComponentLocation();
+	FVector RightEyeGaze = WorldRot.RotateVector(ScaleToUE4Meters * ced.RGazeRay);
+	FVector RightEyeOrigin = WorldRot.RotateVector(ced.REyeOrigin) + FirstPersonCam->GetComponentLocation();
 	DrawDebugLine(World, RightEyeOrigin, RightEyeOrigin + RightEyeGaze, FColor::Yellow, false, -1, 0, 1);
 
+	// append the data to our cumulative bookkeeping
+	AllData.push_back(ced);
 }
 
 // Called to bind functionality to input
@@ -143,3 +148,24 @@ void AEyeTrackerCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 }
 
+void AEyeTrackerCameraPawn::WriteDataToFile() const {
+	std::ofstream SREyeFile("eye_data_SR.txt");
+	for(auto ced : AllData){
+		SREyeFile << ced.TimestampSR / 1000.0 << " ";
+	}
+	SREyeFile.close();
+	std::ofstream UE4EyeFile("eye_data_UE4.txt");
+	for(auto ced : AllData){
+		UE4EyeFile << ced.TimestampUE4 / 1000.0 << " ";
+	}
+	UE4EyeFile.close();
+	// std::ofstream EyeFile("eye_data.txt");
+	// for(auto ced : AllData){
+	// 	EyeFile << "T_SR: " << ced.TimestampSR << " "; // SRanipal timestamp
+	// 	EyeFile << "T_UE4: " << ced.TimestampUE4 << " "; // UE4 Timestamp
+
+	// 	// newline
+	// 	EyeFile << std::endl;
+	// }
+	// EyeFile.close();
+}
