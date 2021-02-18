@@ -148,24 +148,22 @@ void AEyeTrackerCameraPawn::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 }
 
-void AEyeTrackerCameraPawn::WriteDataToFile() const {
-	std::ofstream SREyeFile("eye_data_SR.txt");
-	for(auto ced : AllData){
-		SREyeFile << ced.TimestampSR / 1000.0 << " ";
+void WriteToFile(const std::vector<float> &data, const std::string &name){
+	std::ofstream FILE(name + ".txt");
+	for(auto x : data){
+		FILE << x << " ";
 	}
-	SREyeFile.close();
-	std::ofstream UE4EyeFile("eye_data_UE4.txt");
-	for(auto ced : AllData){
-		UE4EyeFile << ced.TimestampUE4 / 1000.0 << " ";
-	}
-	UE4EyeFile.close();
-	// std::ofstream EyeFile("eye_data.txt");
-	// for(auto ced : AllData){
-	// 	EyeFile << "T_SR: " << ced.TimestampSR << " "; // SRanipal timestamp
-	// 	EyeFile << "T_UE4: " << ced.TimestampUE4 << " "; // UE4 Timestamp
+	FILE.close();
+}
 
-	// 	// newline
-	// 	EyeFile << std::endl;
-	// }
-	// EyeFile.close();
+void AEyeTrackerCameraPawn::WriteDataToFile() const {
+	std::vector<float> TimesSR, TimesUE4;
+	// preprocess all data into vector of floats for easy printings
+	for(auto ced : AllData){
+		TimesSR.push_back(ced.TimestampSR / 1000.0f);
+		TimesUE4.push_back(ced.TimestampUE4 / 1000.0f);
+	}
+	// write to file
+	WriteToFile(TimesSR, "sranipal");
+	WriteToFile(TimesUE4, "ue4");
 }
